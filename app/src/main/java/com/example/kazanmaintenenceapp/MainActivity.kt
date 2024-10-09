@@ -61,9 +61,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.kazaninventoryapp.Models.Asset
 import com.example.kazaninventoryapp.httpservice.httpgetassets
 import com.example.kazanmaintenenceapp.API.httpgettasks
+import com.example.kazanmaintenenceapp.API.httpposttask
 import com.example.kazanmaintenenceapp.Models.Task
 import com.example.kazanmaintenenceapp.ui.theme.KazanMaintenenceAppTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -129,15 +132,6 @@ fun TaskScreen(navController: NavController, context: Context) {
     )
     var assetsList = remember { mutableStateOf<List<Asset>>(emptyList()) }
 
-    fun tryParse(dateString: String?): Date? {
-        return try {
-            dateString?.let {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it)
-            }
-        } catch (e: ParseException) {
-            null // Return null if parsing fails
-        }
-    }
 
     // Function to refresh tasks based on activeDate, selectedAssetName, and selectedTaskName
 
@@ -208,12 +202,12 @@ fun TaskScreen(navController: NavController, context: Context) {
                 val taskColor = when {
                     task.scheduleKilometer != null && !task.taskDone -> Color.Black
                     task.scheduleKilometer != null && task.taskDone -> Color.Gray
-                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(activeDateParsed) == true && !task.taskDone -> Color.Red
-                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(activeDateParsed) == true && task.taskDone -> Color(0xFFFFA500)
+                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)) == true && !task.taskDone -> Color.Red
+                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)) == true && task.taskDone -> Color(0xFFFFA500)
                     task.scheduleDate == activeDate && !task.taskDone -> Color.Black
                     task.scheduleDate == activeDate && task.taskDone -> Color.Green
-                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.after(activeDateParsed) == true && task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(fourDaysLater) == true && !task.taskDone -> Color(0xFF800080)
-                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.after(activeDateParsed) == true && task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(fourDaysLater) == true && task.taskDone -> Color.Black
+                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.after(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)) == true && task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(fourDaysLater) == true && !task.taskDone -> Color(0xFF800080)
+                    task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.after(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)) == true && task.scheduleDate?.let { date -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date) }?.before(fourDaysLater) == true && task.taskDone -> Color.Black
                     else -> Color.Black
                 }
                 Row(
@@ -224,6 +218,9 @@ fun TaskScreen(navController: NavController, context: Context) {
                 ) {
 
                     TaskCard(task, navController, context, taskColor)
+                    {
+                        filterTasks()
+                    }
                 }
             }
         }
@@ -245,11 +242,11 @@ fun TaskScreen(navController: NavController, context: Context) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DropDownMenu(items = assetsList.value.map { it.AssetName}.toList(), name = "Select Asset", selectedItem = selectedAssetName) { selectedAsset ->
+            DropDownMenu(items = assetsList.value.map { it.AssetName}.toList(), name = "Select Asset", selectedItem = selectedAssetName, 130) { selectedAsset ->
                 selectedAssetName = selectedAsset
                 filterTasks()
             }
-            DropDownMenu(items = taskMap.values.toList(), name = "Select Task", selectedItem = selectedTaskName) { selectedTask ->
+            DropDownMenu(items = taskMap.values.toList(), name = "Select Task", selectedItem = selectedTaskName, 130) { selectedTask ->
                 selectedTaskName = selectedTask
                 filterTasks()
             }
@@ -257,8 +254,9 @@ fun TaskScreen(navController: NavController, context: Context) {
                 selectedAssetName = ""
                 selectedTaskName = ""
                 activeDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                filterTasks()
                 filteredTaskList = tasksList
+                filterTasks()
+
             },
                 modifier = Modifier
                     .height(50.dp).align(Alignment.CenterVertically)
@@ -275,36 +273,52 @@ fun TaskScreen(navController: NavController, context: Context) {
 }
 
 @Composable
-fun TaskCard(task: Task, navController: NavController, context: Context,taskColor: Color) {
+fun TaskCard(task: Task, navController: NavController, context: Context, taskColor: Color, onCheck: (Task) -> Unit) {
+    var selectedTask by remember { mutableStateOf(task) }
+    var checked by remember { mutableStateOf(selectedTask.taskDone) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(25.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
 
-            Column(modifier = Modifier.padding(16.dp)
+            Column(modifier = Modifier.padding(5.dp)
             ) {
-                Text(text = "Asset Name: ${task.assetName}", color = taskColor)
-                Text(text = "Asset SN: ${task.assetSN}", color = taskColor)
-                Text(text = "Task Name: ${task.taskName}", color = taskColor)
-                Text(text = "Schedule Type: ${task.scheduleType}", color = taskColor)
-                task.scheduleDate?.let {
+                Text(text = "Asset Name: ${selectedTask.assetName}", color = taskColor)
+                Text(text = "Asset SN: ${selectedTask.assetSN}", color = taskColor)
+                Text(text = "Task Name: ${selectedTask.taskName}", color = taskColor)
+                Text(text = "Schedule Type: ${selectedTask.scheduleType}", color = taskColor)
+                selectedTask.scheduleDate?.let {
                     Text(text = "Schedule Date: $it", color = taskColor)
                 }
-                task.scheduleKilometer?.let {
+                selectedTask.scheduleKilometer?.let {
                     Text(text = "Schedule Kilometer: $it", color = taskColor)
                 }
             }
             Checkbox(
-                checked = task.taskDone,
+                checked = checked,
                 onCheckedChange = {
-                    task.taskDone = it
+                    checked = it
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val httpPostTask = httpposttask()
+                        onCheck(task)
+                        task.taskDone = checked
+                        httpPostTask.postTask(task, {
+                            // Success
+                            //task.taskDone = isChecked
+
+                        }, {
+                            // Failure
+                            //checked = !checked
+                        })
+                    }
                 }
             )
 
@@ -325,45 +339,96 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
     var selectedScheduleModel by remember { mutableStateOf("") }
     var scheduleParameter by remember { mutableStateOf("") }
     val scheduleModels = listOf("Daily", "Weekly", "Monthly", "Run-based")
+    var selectedAssetName by remember { mutableStateOf("") }
+    var selectedTaskName by remember { mutableStateOf("") }
+    var taskList by remember { mutableStateOf<List<String>>(emptyList()) }
+    val taskMap = mapOf(
+        1 to "Get Tires Rotated and Balanced.",
+        2 to "Check Engine Oil",
+        3 to "Check Air Filter",
+        4 to "Check Battery",
+        5 to "Inspect for any damage to paint on pump",
+        6 to "Inspect cord and cord placement",
+        7 to "Pull each pump and reset"
+    )
+    var assetsList = remember { mutableStateOf<List<Asset>>(emptyList()) }
+    val httpgetassets by remember { mutableStateOf(httpgetassets()) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val fetchedAssets = httpgetassets.getAssets()
+            assetsList.value = fetchedAssets ?: listOf()
+        }
+    }
+
+
+
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(text = "Register New Preventive Maintenance Task", style = MaterialTheme.typography.bodyLarge)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = assetName,
-            onValueChange = { assetName = it },
-            label = { Text("Asset Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            DropDownMenu(items = assetsList.value.map { it.AssetName}.toList(), name = "Select Asset", selectedItem = selectedAssetName,130) { selectedAsset ->
+                selectedAssetName = selectedAsset
+            }
+            DropDownMenu(items = taskMap.values.toList(), name = "Select Task", selectedItem = selectedTaskName,130) { selectedTask ->
+                selectedTaskName = selectedTask
+            }
+            Button(onClick = {
+                selectedAssetName = ""
+                selectedTaskName = ""
 
+
+            },
+                modifier = Modifier
+                    .height(50.dp).align(Alignment.CenterVertically)
+            ) {
+                Text("Clear")
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
+        Row (
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ){
+            Text("Start Date",
+                modifier = Modifier.align(Alignment.CenterVertically)
 
-        OutlinedTextField(
-            value = taskName,
-            onValueChange = { taskName = it },
-            label = { Text("Task Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            DatePickerDocked(
+                identifier = "startDate",
+                selectedDate = taskStartDate,
+                label = taskStartDate,
+                onDateSelected = {
+                    taskStartDate = it
+                }
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Row (
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ){
+            Text("End Date",
+                modifier = Modifier.align(Alignment.CenterVertically)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            DatePickerDocked(
+                identifier = "endDate",
+                selectedDate = taskEndDate,
+                label = taskEndDate,
+                onDateSelected = {
+                    taskEndDate = it
+                }
+            )
+        }
 
-        OutlinedTextField(
-            value = taskStartDate,
-            onValueChange = { taskStartDate = it },
-            label = { Text("Task Start Date") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = taskEndDate,
-            onValueChange = { taskEndDate = it },
-            label = { Text("Task End Date") },
-            modifier = Modifier.fillMaxWidth()
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -371,7 +436,8 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
             items = scheduleModels,
             name = "Schedule Model",
             selectedItem = selectedScheduleModel,
-            onItemSelected = { selectedScheduleModel = it }
+            onItemSelected = { selectedScheduleModel = it },
+            width = 300
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -412,12 +478,17 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+//        LazyColumn (
+//            modifier = Modifier.fillMaxSize()
+//        ){ items(taskList) { task ->
+//            Text(text = task)
+//        } }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(onClick = { navController.navigateUp() }) {
+            Button(onClick = { navController.navigate("taskScreen") }) {
                 Text("Back")
             }
             Button(onClick = { /* Handle form submission */ }) {
@@ -518,14 +589,14 @@ fun convertMillisToDate(millis: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DropDownMenu(items: List<String>, name: String, selectedItem: String, onItemSelected: (String) -> Unit) {
+fun DropDownMenu(items: List<String>, name: String, selectedItem: String,width: Int, onItemSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
         modifier = Modifier
-            .width(130.dp)
+            .width(width.dp)
             .padding(5.dp) // Adjust the width as needed
     ) {
         TextField(

@@ -33,6 +33,7 @@ class httpgettasks {
                     val taskObject = jsonArray.getJSONObject(i)
                     val scheduleKilometer = if (taskObject.isNull("scheduleKilometer")) null else taskObject.getInt("scheduleKilometer")
                     val asset = Task(
+                        taskObject.getInt("id"),
                         taskObject.getString("assetName"),
                         taskObject.getString("assetSn"),
                         taskObject.getString("name"),
