@@ -2,6 +2,7 @@ package com.example.kazanmaintenenceapp
 
 import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -60,14 +61,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.kazaninventoryapp.Models.Asset
 import com.example.kazaninventoryapp.httpservice.httpgetassets
+import com.example.kazanmaintenenceapp.API.httpcreatetasks
 import com.example.kazanmaintenenceapp.API.httpgettasks
 import com.example.kazanmaintenenceapp.API.httpposttask
+import com.example.kazanmaintenenceapp.Models.CreateTask
 import com.example.kazanmaintenenceapp.Models.Task
 import com.example.kazanmaintenenceapp.ui.theme.KazanMaintenenceAppTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.intellij.lang.annotations.JdkConstants.HorizontalAlignment
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -84,7 +88,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     NavHost(
                         navController = navController,
-                        startDestination = "registerNewTask",
+                        startDestination = "taskScreen",
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable("taskScreen") {
@@ -108,7 +112,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TaskScreen(navController: NavController, context: Context) {
-    var activeDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
+    //var activeDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
+    var activeDate by remember { mutableStateOf("2023-02-01") }
     var tasksList by remember { mutableStateOf<List<Task>>(emptyList()) }
     var checkedTasks by remember { mutableStateOf(mutableSetOf<Task>()) }
     val httpgettasks by remember { mutableStateOf(httpgettasks()) }
@@ -116,10 +121,11 @@ fun TaskScreen(navController: NavController, context: Context) {
     var filteredTaskList by remember { mutableStateOf<List<Task>>(emptyList()) }
     var selectedAssetName by remember { mutableStateOf("") }
     var selectedTaskName by remember { mutableStateOf("") }
+    var refreshScreen by remember { mutableStateOf(false) }
     var activeDateParsed by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)) }
     var fourDaysLater by remember { mutableStateOf(Calendar.getInstance().apply {
         time = activeDateParsed
-        add(Calendar.DAY_OF_YEAR, 4)
+        add(Calendar.DAY_OF_YEAR, 5)
     }.time) }
     val taskMap = mapOf(
         1 to "Get Tires Rotated and Balanced.",
@@ -132,23 +138,26 @@ fun TaskScreen(navController: NavController, context: Context) {
     )
     var assetsList = remember { mutableStateOf<List<Asset>>(emptyList()) }
 
-
     // Function to refresh tasks based on activeDate, selectedAssetName, and selectedTaskName
 
     fun filterTasks() {
         activeDateParsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(activeDate)
-
+        fourDaysLater=Calendar.getInstance().apply {
+            time = activeDateParsed
+            add(Calendar.DAY_OF_YEAR, 5)
+        }.time
         try {
             val runBasedList = tasksList.filter {
-                it.scheduleKilometer != null
+                it.scheduleType == "By Milage"
             }
-
             val notDoneRunBasedList = runBasedList.filter { !it.taskDone }
             val doneRunBasedList = runBasedList.filter { it.taskDone }
+
             filteredTaskList = tasksList.filter { task ->
                 (selectedAssetName.isEmpty() || task.assetName == selectedAssetName) &&
                         (selectedTaskName.isEmpty() || task.taskName == selectedTaskName) &&
-                        (task.scheduleDate == activeDate || task.scheduleKilometer == null )
+                        (task.scheduleDate == activeDate || task.scheduleKilometer == null ) &&
+                        (SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(task.scheduleDate)?.before(fourDaysLater) == true)
             }.sortedBy {
                 when {
                     SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(it.scheduleDate).before(activeDateParsed) && !it.taskDone -> 0
@@ -178,6 +187,22 @@ fun TaskScreen(navController: NavController, context: Context) {
         }
         filterTasks()
     }
+
+    if (refreshScreen) {
+        LaunchedEffect(Unit) {
+            withContext(Dispatchers.IO) {
+                val fetchedTasks = httpgettasks.getTasks()
+                tasksList = fetchedTasks ?: listOf()
+
+                val fetchedAssets = httpgetassets.getAssets()
+                assetsList.value = fetchedAssets ?: listOf()
+                filteredTaskList = tasksList
+            }
+            filterTasks()
+            refreshScreen = false
+        }
+    }
+
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Active Date Entry
@@ -219,7 +244,7 @@ fun TaskScreen(navController: NavController, context: Context) {
 
                     TaskCard(task, navController, context, taskColor)
                     {
-                        filterTasks()
+                        refreshScreen = true
                     }
                 }
             }
@@ -254,7 +279,6 @@ fun TaskScreen(navController: NavController, context: Context) {
                 selectedAssetName = ""
                 selectedTaskName = ""
                 activeDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                filteredTaskList = tasksList
                 filterTasks()
 
             },
@@ -334,14 +358,14 @@ fun TaskCard(task: Task, navController: NavController, context: Context, taskCol
 fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController, context: Context) {
     var assetName by remember { mutableStateOf("") }
     var taskName by remember { mutableStateOf("") }
-    var taskStartDate by remember { mutableStateOf("") }
+    var taskStartDate by remember { mutableStateOf("2023-02-01") }
     var taskEndDate by remember { mutableStateOf("") }
     var selectedScheduleModel by remember { mutableStateOf("") }
     var scheduleParameter by remember { mutableStateOf("") }
     val scheduleModels = listOf("Daily", "Weekly", "Monthly", "Run-based")
     var selectedAssetName by remember { mutableStateOf("") }
     var selectedTaskName by remember { mutableStateOf("") }
-    var taskList by remember { mutableStateOf<List<String>>(emptyList()) }
+    var taskList by remember { mutableStateOf<List<CreateTask>>(emptyList()) }
     val taskMap = mapOf(
         1 to "Get Tires Rotated and Balanced.",
         2 to "Check Engine Oil",
@@ -351,9 +375,15 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
         6 to "Inspect cord and cord placement",
         7 to "Pull each pump and reset"
     )
+    val scheduleTypeMap = mapOf(
+        1 to Pair("Daily", 2),
+        2 to Pair("Weekly", 2),
+        3 to Pair("Monthly", 2),
+        4 to Pair("Run-based", 1)
+    )
     var assetsList = remember { mutableStateOf<List<Asset>>(emptyList()) }
     val httpgetassets by remember { mutableStateOf(httpgetassets()) }
-
+    var odometerReading by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val fetchedAssets = httpgetassets.getAssets()
@@ -382,8 +412,10 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
             Button(onClick = {
                 selectedAssetName = ""
                 selectedTaskName = ""
-
-
+                taskStartDate = "2023-02-01"
+                taskEndDate = ""
+                scheduleParameter = ""
+                selectedScheduleModel = ""
             },
                 modifier = Modifier
                     .height(50.dp).align(Alignment.CenterVertically)
@@ -392,58 +424,58 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Row (
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ){
-            Text("Start Date",
-                modifier = Modifier.align(Alignment.CenterVertically)
 
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            DatePickerDocked(
-                identifier = "startDate",
-                selectedDate = taskStartDate,
-                label = taskStartDate,
-                onDateSelected = {
-                    taskStartDate = it
-                }
-            )
-        }
 
-        Row (
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ){
-            Text("End Date",
-                modifier = Modifier.align(Alignment.CenterVertically)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            DatePickerDocked(
-                identifier = "endDate",
-                selectedDate = taskEndDate,
-                label = taskEndDate,
-                onDateSelected = {
-                    taskEndDate = it
-                }
-            )
+        DropDownMenu(items = scheduleModels.toList(), name = "Schedule Model", selectedItem = selectedScheduleModel,350) { selectedSchedule ->
+            selectedScheduleModel = selectedSchedule
         }
 
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        DropDownMenu(
-            items = scheduleModels,
-            name = "Schedule Model",
-            selectedItem = selectedScheduleModel,
-            onItemSelected = { selectedScheduleModel = it },
-            width = 300
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         when (selectedScheduleModel) {
             "Daily" -> {
+
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("Start Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "startDate",
+                        selectedDate = taskStartDate,
+                        label = taskStartDate,
+                        onDateSelected = {
+                            taskStartDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("End Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "endDate",
+                        selectedDate = taskEndDate,
+                        label = taskEndDate,
+                        onDateSelected = {
+                            taskEndDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
@@ -452,6 +484,44 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                 )
             }
             "Weekly" -> {
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("Start Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "startDate",
+                        selectedDate = taskStartDate,
+                        label = taskStartDate,
+                        onDateSelected = {
+                            taskStartDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("End Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "endDate",
+                        selectedDate = taskEndDate,
+                        label = taskEndDate,
+                        onDateSelected = {
+                            taskEndDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
@@ -460,6 +530,44 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                 )
             }
             "Monthly" -> {
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("Start Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "startDate",
+                        selectedDate = taskStartDate,
+                        label = taskStartDate,
+                        onDateSelected = {
+                            taskStartDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row (
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ){
+                    Text("End Date",
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    DatePickerDocked(
+                        identifier = "endDate",
+                        selectedDate = taskEndDate,
+                        label = taskEndDate,
+                        onDateSelected = {
+                            taskEndDate = it
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
@@ -471,33 +579,116 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
+                    label = { Text("Kilometers") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = odometerReading,
+                    onValueChange = { odometerReading = it },
                     label = { Text("Odometer Reading Range") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            "" -> {}
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-//        LazyColumn (
-//            modifier = Modifier.fillMaxSize()
-//        ){ items(taskList) { task ->
-//            Text(text = task)
-//        } }
+        Box (modifier = Modifier.weight(1f).padding(16.dp)){
+            Row (
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ){
+                LazyColumn (
+                    modifier = Modifier.fillMaxSize()
+                ){
 
+                    if (taskList.isNotEmpty()) {
+
+                        items(taskList) { task ->
+                            Text(text = assetsList.value.find { it.ID == task.assetID }?.AssetName ?: "Asset Name Not Found")
+                        }
+                    } }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = {
+
+                }) {
+                    Text("Add Task")
+                }
+            }
+
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Toast.LENGTH_SHORT
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(onClick = { navController.navigate("taskScreen") }) {
-                Text("Back")
+            Button(onClick = {
+                var kilometerRange: Int? = null
+                if(scheduleParameter.isEmpty() || scheduleParameter.toIntOrNull() == null) {
+                    kilometerRange = null
+                }
+                kilometerRange = scheduleParameter.takeIf { it.isNotEmpty() }?.toIntOrNull()
+
+
+                if (scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second == 1)
+                {
+                    val newtask = CreateTask(
+                        assetID = assetsList.value.find { it.AssetName == selectedAssetName }?.ID ?: 0,
+                        taskId = taskMap.filterValues { it == selectedTaskName }.keys.first(),
+                        scheduleType = scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second,
+                        scheduleDate = null,
+                        scheduleKilometer = kilometerRange,
+                        taskDone = false,
+                        odometerReading = odometerReading.takeIf { it.isNotEmpty() }?.toIntOrNull()
+                    )
+                    taskList = taskList + newtask
+                }
+                else{
+                    val newtask = CreateTask(
+                        assetID = assetsList.value.find { it.AssetName == selectedAssetName }?.ID ?: 0,
+                        taskId = taskMap.filterValues { it == selectedTaskName }.keys.first(),
+                        scheduleType = scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second,
+                        scheduleDate = if (taskStartDate.isEmpty()) null else taskStartDate,
+                        scheduleKilometer = null,
+                        taskDone = false,
+                        odometerReading = null
+                    )
+                    taskList = taskList + newtask
+                }
+//                selectedAssetName = ""
+//                selectedTaskName = ""
+                taskStartDate = "2023-02-01"
+                taskEndDate = ""
+                scheduleParameter = ""
+                //selectedScheduleModel = ""
+
+
+
+            }) {
+                Text("Add Task")
             }
-            Button(onClick = { /* Handle form submission */ }) {
+            Button(onClick = {
+                CoroutineScope(Dispatchers.IO).launch {
+                    val httpcreatetasks = httpcreatetasks()
+                        httpcreatetasks.postTask(taskList, {
+                            Toast.makeText(context, "Tasks added successfully", Toast.LENGTH_SHORT).show()
+                            navController.navigate("taskScreen")
+                        }, {
+                            Toast.makeText(context, "Failed to add tasks", Toast.LENGTH_SHORT).show()
+                        })
+
+                }
+            }) {
                 Text("Submit")
             }
-            Button(onClick = { navController.navigateUp() }) {
+            Button(onClick = { navController.navigate("taskScreen") }) {
                 Text("Cancel")
             }
         }
+
     }
 }
 
