@@ -12,8 +12,6 @@ import java.net.URL
 
 class httpposttask {
     fun postTask(asset: Task, onSuccess: (Boolean) -> Unit, onFailure: (Throwable) -> Unit) {
-
-
         val url = URL("http://10.0.2.2:5072/api/Maintenance/updatetask")
         try {
             val con = url.openConnection() as HttpURLConnection
