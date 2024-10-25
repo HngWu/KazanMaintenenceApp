@@ -130,8 +130,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TaskScreen(navController: NavController, context: Context) {
-    //var activeDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
-    var activeDate by remember { mutableStateOf("2023-02-05") }
+    var activeDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
     var tasksList by remember { mutableStateOf<List<Task>>(emptyList()) }
     var checkedTasks by remember { mutableStateOf(mutableSetOf<Task>()) }
     val httpgettasks by remember { mutableStateOf(httpgettasks()) }
@@ -811,6 +810,8 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
                                             calendar.time
                                         )
+
+
                                     newTasks.add(
                                         CreateTask(
                                             assetID = assetID,
