@@ -2,10 +2,12 @@ package com.example.kazanmaintenenceapp
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
@@ -82,27 +87,40 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val colorScheme = lightColorScheme(
+            primary = Color(0xFF005CB9),
+            onPrimary = Color.White,
+            // Add other color customizations if needed
+        )
+
         setContent {
-            KazanMaintenenceAppTheme {
-                val navController = rememberNavController()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = "taskScreen",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("taskScreen") {
-                            TaskScreen(navController, this@MainActivity)
-                        }
-                        composable("registerNewTask") {
-                            RegisteringNewPreventiveMaintenanceTasksScreen(navController, this@MainActivity)
+            MaterialTheme(
+                colorScheme = colorScheme,
+                typography = androidx.compose.material3.Typography(),
+                content = {
+                    val navController = rememberNavController()
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        NavHost(
+                            navController = navController,
+                            startDestination = "taskScreen",
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
+                            composable("taskScreen") {
+                                TaskScreen(navController, this@MainActivity)
+                            }
+                            composable("registerNewTask") {
+                                RegisteringNewPreventiveMaintenanceTasksScreen(
+                                    navController,
+                                    this@MainActivity
+                                )
+                            }
                         }
                     }
-                }
+                })
             }
         }
     }
-}
+
 
 
 
@@ -113,7 +131,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TaskScreen(navController: NavController, context: Context) {
     //var activeDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
-    var activeDate by remember { mutableStateOf("2023-02-01") }
+    var activeDate by remember { mutableStateOf("2023-02-05") }
     var tasksList by remember { mutableStateOf<List<Task>>(emptyList()) }
     var checkedTasks by remember { mutableStateOf(mutableSetOf<Task>()) }
     val httpgettasks by remember { mutableStateOf(httpgettasks()) }
@@ -206,15 +224,36 @@ fun TaskScreen(navController: NavController, context: Context) {
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Active Date Entry
-        DatePickerDocked(
-            identifier = "activeDate",
-            selectedDate = activeDate,
-            label = activeDate,
-            onDateSelected = {
-                activeDate = it
-                filterTasks()
-            }
-        )
+
+        Row (
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ){
+            Text("Active Date",
+                modifier = Modifier.align(Alignment.CenterVertically)
+
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            DatePickerDocked(
+                identifier = "activeDate",
+                selectedDate = activeDate,
+                label = activeDate,
+                onDateSelected = {
+                    activeDate = it
+                    filterTasks()
+                }
+            )
+            Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "Kazan Logo",
+                modifier = Modifier
+                    .size(75.dp)
+                    .padding(10.dp)
+            )
+        }
+
+
+
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -390,40 +429,77 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
             assetsList.value = fetchedAssets ?: listOf()
         }
     }
+    var addedAssetList by remember { mutableStateOf<List<Asset>>(emptyList()) }
+    var gapParameter by remember { mutableStateOf("") }
+    var checkEndDate by remember { mutableStateOf(false) }
 
+    if (checkEndDate) {
 
+        taskEndDate = ""
+
+        checkEndDate = false
+    }
 
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(text = "Register New Preventive Maintenance Task", style = MaterialTheme.typography.bodyLarge)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DropDownMenu(items = assetsList.value.map { it.AssetName}.toList(), name = "Select Asset", selectedItem = selectedAssetName,130) { selectedAsset ->
-                selectedAssetName = selectedAsset
-            }
-            DropDownMenu(items = taskMap.values.toList(), name = "Select Task", selectedItem = selectedTaskName,130) { selectedTask ->
+
+            DropDownMenu(items = taskMap.values.toList(), name = "Select Task", selectedItem = selectedTaskName,330) { selectedTask ->
                 selectedTaskName = selectedTask
             }
+//            Button(onClick = {
+//                selectedAssetName = ""
+//                selectedTaskName = ""
+//                taskStartDate = "2023-02-01"
+//                taskEndDate = ""
+//                scheduleParameter = ""
+//                selectedScheduleModel = ""
+//            },
+//                modifier = Modifier
+//                    .height(50.dp).align(Alignment.CenterVertically)
+//            ) {
+//                Text("Clear")
+//            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row (
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ){
+            DropDownMenu(items = assetsList.value.map { it.AssetName}.toList(), name = "Select Asset", selectedItem = selectedAssetName,230) { selectedAsset ->
+                selectedAssetName = selectedAsset
+            }
+            Spacer(modifier = Modifier.width(10.dp))
             Button(onClick = {
+                addedAssetList = addedAssetList + assetsList.value.find { it.AssetName == selectedAssetName }!!
                 selectedAssetName = ""
-                selectedTaskName = ""
-                taskStartDate = "2023-02-01"
-                taskEndDate = ""
-                scheduleParameter = ""
-                selectedScheduleModel = ""
             },
                 modifier = Modifier
                     .height(50.dp).align(Alignment.CenterVertically)
             ) {
-                Text("Clear")
+                Text("Add to List")
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().height(100.dp).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            items(addedAssetList) { asset ->
+                Text(text = asset.AssetName)
+            }
+        }
+
+
+
 
 
         DropDownMenu(items = scheduleModels.toList(), name = "Schedule Model", selectedItem = selectedScheduleModel,350) { selectedSchedule ->
@@ -433,6 +509,7 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
 
 
         Spacer(modifier = Modifier.height(16.dp))
+
 
         when (selectedScheduleModel) {
             "Daily" -> {
@@ -455,7 +532,7 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row (
                     modifier = Modifier.fillMaxWidth(),
@@ -470,16 +547,29 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         selectedDate = taskEndDate,
                         label = taskEndDate,
                         onDateSelected = {
+                            var previousEndDate = taskEndDate
                             taskEndDate = it
+                            if (taskEndDate >= taskStartDate) {
+                            } else {
+                                Toast.makeText(context, "End Date must be after Start Date", Toast.LENGTH_SHORT).show()
+                                taskEndDate = previousEndDate
+                                // Handle the case where end date is before start date
+                            }
+
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
+
 
                 OutlinedTextField(
-                    value = scheduleParameter,
-                    onValueChange = { scheduleParameter = it },
-                    label = { Text("Interval in Days") },
+                    value = gapParameter,
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            gapParameter = it
+                        }
+                    },
+                    label = { Text("Gap in Days") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -502,7 +592,7 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row (
                     modifier = Modifier.fillMaxWidth(),
@@ -517,15 +607,35 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         selectedDate = taskEndDate,
                         label = taskEndDate,
                         onDateSelected = {
+                            var previousEndDate = taskEndDate
                             taskEndDate = it
+                            if (taskEndDate >= taskStartDate) {
+                            } else {
+                                Toast.makeText(context, "End Date must be after Start Date", Toast.LENGTH_SHORT).show()
+                                taskEndDate = previousEndDate
+                                // Handle the case where end date is before start date
+                            }
+
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
-                    label = { Text("Day of Week and Interval in Weeks") },
+                    label = { Text("Day of Week") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+
+                OutlinedTextField(
+                    value = gapParameter,
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            gapParameter = it
+                        }
+                    },
+                    label = { Text("Gap in Weeks") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -548,7 +658,7 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row (
                     modifier = Modifier.fillMaxWidth(),
@@ -563,30 +673,69 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
                         selectedDate = taskEndDate,
                         label = taskEndDate,
                         onDateSelected = {
+                            var previousEndDate = taskEndDate
                             taskEndDate = it
+                            if (taskEndDate >= taskStartDate) {
+                            } else {
+                                Toast.makeText(context, "End Date must be after Start Date", Toast.LENGTH_SHORT).show()
+                                taskEndDate = previousEndDate
+                                // Handle the case where end date is before start date
+                            }
+
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 OutlinedTextField(
                     value = scheduleParameter,
                     onValueChange = { scheduleParameter = it },
-                    label = { Text("Day of Month and Interval in Months") },
+                    label = { Text("Day of Month ") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+
+                OutlinedTextField(
+                    value = gapParameter,
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            gapParameter = it
+                        }
+                    },
+                    label = { Text("Gap in Months") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
             "Run-based" -> {
                 OutlinedTextField(
                     value = scheduleParameter,
-                    onValueChange = { scheduleParameter = it },
-                    label = { Text("Kilometers") },
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            scheduleParameter = it
+                        }
+                    },
+                    label = { Text("Start Range") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = odometerReading,
-                    onValueChange = { odometerReading = it },
-                    label = { Text("Odometer Reading Range") },
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            odometerReading = it
+                        }
+                    },
+                    label = { Text("End Range") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = gapParameter,
+                    onValueChange = {
+                        if (it.toIntOrNull() != null) {
+                            gapParameter = it
+                        }
+                    },
+                    label = { Text("Gap") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -625,73 +774,177 @@ fun RegisteringNewPreventiveMaintenanceTasksScreen(navController: NavController,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(onClick = {
-                var kilometerRange: Int? = null
-                if(scheduleParameter.isEmpty() || scheduleParameter.toIntOrNull() == null) {
-                    kilometerRange = null
-                }
-                kilometerRange = scheduleParameter.takeIf { it.isNotEmpty() }?.toIntOrNull()
 
 
-                if (scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second == 1)
-                {
-                    val newtask = CreateTask(
-                        assetID = assetsList.value.find { it.AssetName == selectedAssetName }?.ID ?: 0,
-                        taskId = taskMap.filterValues { it == selectedTaskName }.keys.first(),
-                        scheduleType = scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second,
-                        scheduleDate = null,
-                        scheduleKilometer = kilometerRange,
-                        taskDone = false,
-                        odometerReading = odometerReading.takeIf { it.isNotEmpty() }?.toIntOrNull()
-                    )
-                    taskList = taskList + newtask
-                }
-                else{
-                    val newtask = CreateTask(
-                        assetID = assetsList.value.find { it.AssetName == selectedAssetName }?.ID ?: 0,
-                        taskId = taskMap.filterValues { it == selectedTaskName }.keys.first(),
-                        scheduleType = scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second,
-                        scheduleDate = if (taskStartDate.isEmpty()) null else taskStartDate,
-                        scheduleKilometer = null,
-                        taskDone = false,
-                        odometerReading = null
-                    )
-                    taskList = taskList + newtask
-                }
-//                selectedAssetName = ""
-//                selectedTaskName = ""
-                taskStartDate = "2023-02-01"
-                taskEndDate = ""
-                scheduleParameter = ""
-                //selectedScheduleModel = ""
-
-
-
-            }) {
-                Text("Add Task")
+            Button(onClick = { navController.navigate("taskScreen") }) {
+                Text("Cancel")
             }
+
             Button(onClick = {
+                val newTasks = mutableListOf<CreateTask>()
+                val scheduleType = scheduleTypeMap.entries.first { it.value.first == selectedScheduleModel }.value.second
+                if (addedAssetList.isEmpty()) {
+                    Toast.makeText(context, "No assets selected", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                try {
+                    addedAssetList.forEach { asset ->
+                        val assetID = asset.ID
+                        val taskID = taskMap.filterValues { it == selectedTaskName }.keys.first()
+
+                        when (selectedScheduleModel) {
+                            "Daily" -> {
+                                val intervalInDays = gapParameter.toIntOrNull() ?: 0
+                                val startDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskStartDate
+                                    )
+                                val endDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskEndDate
+                                    )
+                                val calendar = Calendar.getInstance()
+                                calendar.time = startDate
+
+                                while (calendar.time.before(endDate) || calendar.time == endDate) {
+                                    val scheduleDate =
+                                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                                            calendar.time
+                                        )
+                                    newTasks.add(
+                                        CreateTask(
+                                            assetID = assetID,
+                                            taskId = taskID,
+                                            scheduleType = scheduleType,
+                                            scheduleDate = scheduleDate,
+                                            scheduleKilometer = null,
+                                            taskDone = false,
+                                            odometerReading = null
+                                        )
+                                    )
+                                    Log.d("calendar.time", calendar.time.toString())
+                                    var checkDate = calendar.time.toString()
+                                    calendar.add(Calendar.DAY_OF_YEAR, intervalInDays)
+                                }
+                            }
+
+                            "Weekly" -> {
+                                var dayOfWeek = scheduleParameter.toIntOrNull() ?: 0
+                                val intervalInWeeks = gapParameter.toIntOrNull() ?: 0
+                                val startDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskStartDate
+                                    )
+                                val endDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskEndDate
+                                    )
+                                val calendar = Calendar.getInstance()
+                                calendar.time = startDate
+
+                                while (calendar.time.before(endDate) || calendar.time == endDate) {
+                                    calendar.set(Calendar.DAY_OF_WEEK, dayOfWeek + 1)
+                                    if (calendar.time.before(startDate)) {
+                                        calendar.add(Calendar.WEEK_OF_YEAR, 1)
+                                    }
+                                    val scheduleDate =
+                                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                                            calendar.time
+                                        )
+                                    newTasks.add(
+                                        CreateTask(
+                                            assetID = assetID,
+                                            taskId = taskID,
+                                            scheduleType = scheduleType,
+                                            scheduleDate = scheduleDate,
+                                            scheduleKilometer = null,
+                                            taskDone = false,
+                                            odometerReading = null
+                                        )
+                                    )
+                                    calendar.add(Calendar.WEEK_OF_YEAR, intervalInWeeks)
+                                }
+                            }
+
+                            "Monthly" -> {
+                                var dayOfMonth = scheduleParameter.toIntOrNull() ?: 0
+                                val intervalInMonths = gapParameter.toIntOrNull() ?: 0
+                                val startDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskStartDate
+                                    )
+                                val endDate =
+                                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(
+                                        taskEndDate
+                                    )
+                                val calendar = Calendar.getInstance()
+                                calendar.time = startDate
+
+                                while (calendar.time.before(endDate) || calendar.time == endDate) {
+                                    calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                    val scheduleDate =
+                                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                                            calendar.time
+                                        )
+                                    newTasks.add(
+                                        CreateTask(
+                                            assetID = assetID,
+                                            taskId = taskID,
+                                            scheduleType = scheduleType,
+                                            scheduleDate = scheduleDate,
+                                            scheduleKilometer = null,
+                                            taskDone = false,
+                                            odometerReading = null
+                                        )
+                                    )
+                                    calendar.add(Calendar.MONTH, intervalInMonths)
+                                }
+                            }
+
+                            "Run-based" -> {
+                                var start = scheduleParameter.toIntOrNull() ?: 0
+                                val end = odometerReading.toIntOrNull() ?: 0
+
+                                while (start <= end) {
+                                    newTasks.add(
+                                        CreateTask(
+                                            assetID = assetID,
+                                            taskId = taskID,
+                                            scheduleType = scheduleType,
+                                            scheduleDate = null,
+                                            scheduleKilometer = start,
+                                            taskDone = false,
+                                            odometerReading = null
+                                        )
+                                    )
+                                    start += gapParameter.toIntOrNull() ?: 0
+                                }
+
+
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                // Submit the tasks
                 CoroutineScope(Dispatchers.IO).launch {
                     val httpcreatetasks = httpcreatetasks()
-                        httpcreatetasks.postTask(taskList, {
-                            Toast.makeText(context, "Tasks added successfully", Toast.LENGTH_SHORT).show()
-                            navController.navigate("taskScreen")
-                        }, {
-                            Toast.makeText(context, "Failed to add tasks", Toast.LENGTH_SHORT).show()
-                        })
-
+                    httpcreatetasks.postTask(newTasks, {
+                        Toast.makeText(context, "Tasks added successfully", Toast.LENGTH_SHORT).show()
+                        navController.navigate("taskScreen")
+                    }, {
+                        Toast.makeText(context, "Failed to add tasks", Toast.LENGTH_SHORT).show()
+                    })
                 }
             }) {
                 Text("Submit")
             }
-            Button(onClick = { navController.navigate("taskScreen") }) {
-                Text("Cancel")
-            }
+
         }
 
     }
 }
-
 
 
 
@@ -708,13 +961,15 @@ fun DatePickerDocked(
     val selectedDate = datePickerState.selectedDateMillis?.let {
         convertMillisToDate(it)
     } ?: ""
+    var selectedDateText by remember { mutableStateOf(selectedDate) }
 
     Box(
         modifier = Modifier
+            .width(200.dp)
             .padding(5.dp)
     ) {
         OutlinedTextField(
-            value = selectedDate,
+            value = selectedDateText,
             onValueChange = { },
             label = { Text(label) },
             readOnly = true,
@@ -727,6 +982,7 @@ fun DatePickerDocked(
                 }
             },
             modifier = Modifier
+                .width(200.dp)
                 .height(64.dp)
         )
 
